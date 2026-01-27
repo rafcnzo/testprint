@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <title>RawBT Print</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background: #111;
+            color: #fff;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+        }
+        button {
+            font-size: 20px;
+            padding: 20px 40px;
+            border: none;
+            border-radius: 10px;
+            background: #00ff99;
+            color: #000;
+            font-weight: bold;
+        }
+        button:active {
+            background: #00cc77;
+        }
+    </style>
+</head>
+<body>
+
+<button onclick="printStruk()">PRINT STRUK</button>
+
+<script>
+function printStruk() {
+    const esc = "\x1B";
+    const gs  = "\x1D";
+
+    let data = "";
+    data += esc + "@";
+    data += esc + "a" + "\x01";
+    data += "TOKO MAJU JAYA\n";
+    data += "------------------------\n";
+    data += esc + "a" + "\x00";
+    data += "Nasi Goreng   2 30000\n";
+    data += "Es Teh        1  5000\n";
+    data += "------------------------\n";
+    data += "TOTAL      : 35000\n\n";
+    data += esc + "a" + "\x01";
+    data += "TERIMA KASIH\n\n\n";
+    data += gs + "V" + "\x00";
+
+    const ws = new WebSocket("ws://127.0.0.1:40213");
+    ws.binaryType = "arraybuffer";
+
+    ws.onopen = function () {
+        const buffer = new Uint8Array(data.length);
+        for (let i = 0; i < data.length; i++) {
+            buffer[i] = data.charCodeAt(i);
+        }
+        ws.send(buffer);
+        ws.close();
+    };
+
+    ws.onerror = function () {
+        alert("RawBT tidak aktif / printer tidak siap");
+    };
+}
+</script>
+
+</body>
+</html>
