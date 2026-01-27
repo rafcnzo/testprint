@@ -51,7 +51,7 @@ function printStruk() {
     data += "TERIMA KASIH\n\n\n";
     data += gs + "V" + "\x00";
 
-    const ws = new WebSocket("ws://127.0.0.1:40213");
+    const ws = new WebSocket("ws://localhost:40213");
     ws.binaryType = "arraybuffer";
 
     ws.onopen = function () {
