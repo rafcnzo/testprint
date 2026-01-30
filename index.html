@@ -2,72 +2,126 @@
 <html lang="id">
 <head>
     <meta charset="UTF-8">
-    <title>RawBT Print</title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test Print JSPM v8 - POS Restoran</title>
     <style>
-        body {
-            font-family: Arial, sans-serif;
-            background: #111;
-            color: #fff;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            height: 100vh;
-        }
-        button {
-            font-size: 20px;
-            padding: 20px 40px;
-            border: none;
-            border-radius: 10px;
-            background: #00ff99;
-            color: #000;
-            font-weight: bold;
-        }
-        button:active {
-            background: #00cc77;
-        }
+        body { font-family: sans-serif; padding: 20px; max-width: 600px; margin: 0 auto; }
+        .box { border: 1px solid #ccc; padding: 15px; border-radius: 5px; margin-bottom: 20px; }
+        .status { font-weight: bold; margin-bottom: 10px; }
+        .connected { color: green; }
+        .disconnected { color: red; }
+        button { padding: 10px 20px; cursor: pointer; background-color: #007bff; color: white; border: none; border-radius: 4px; }
+        button:disabled { background-color: #ccc; }
+        select { padding: 8px; width: 100%; margin-bottom: 10px; }
     </style>
 </head>
 <body>
 
-<button onclick="printStruk()">PRINT STRUK</button>
+    <h2>🛠️ Test JSPrintManager v8 (POS Mini)</h2>
+    
+    <div class="box">
+        <div class="status">
+            Status JSPM Client: <span id="jspm-status" class="disconnected">Mencari Client App...</span>
+        </div>
+        <small>Pastikan aplikasi JSPrintManager Client sudah berjalan di komputer ini.</small>
+    </div>
 
-<script>
-function printStruk() {
-    const esc = "\x1B";
-    const gs  = "\x1D";
+    <div class="box">
+        <label>Pilih Printer:</label>
+        <select id="printer-list" disabled>
+            <option>Menunggu koneksi...</option>
+        </select>
+        
+        <br><br>
+        <button id="btn-print" onclick="doPrint()" disabled>🖨️ Test Print Struk</button>
+    </div>
 
-    let data = "";
-    data += esc + "@";
-    data += esc + "a" + "\x01";
-    data += "TOKO MAJU JAYA\n";
-    data += "------------------------\n";
-    data += esc + "a" + "\x00";
-    data += "Nasi Goreng   2 30000\n";
-    data += "Es Teh        1  5000\n";
-    data += "------------------------\n";
-    data += "TOTAL      : 35000\n\n";
-    data += esc + "a" + "\x01";
-    data += "TERIMA KASIH\n\n\n";
-    data += gs + "V" + "\x00";
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/bluebird/3.3.5/bluebird.min.js"></script>
+    <script src="https://code.jquery.com/jquery-3.2.1.slim.min.js"></script>
+    
+    <script src="https://jsprintmanager.azurewebsites.net/scripts/JSPrintManager.js"></script>
 
-    const ws = new WebSocket("ws://localhost:40213");
-    ws.binaryType = "arraybuffer";
+    <script>
+        // 1. Setup WebSocket & Status
+        var clientPrinters = null;
+        
+        // Cek status koneksi WebSocket ke JSPM Client App
+        JSPM.JSPrintManager.auto_reconnect = true;
+        JSPM.JSPrintManager.start();
+        
+        JSPM.JSPrintManager.WS.onStatusChanged = function () {
+            if (jspmWSStatus()) {
+                // Koneksi Berhasil
+                document.getElementById('jspm-status').innerText = "TERHUBUNG (Connected)";
+                document.getElementById('jspm-status').className = "connected";
+                
+                // Ambil daftar printer
+                getPrinters();
+            } else {
+                // Koneksi Gagal
+                document.getElementById('jspm-status').innerText = "TIDAK TERHUBUNG (Pastikan App JSPM Client berjalan!)";
+                document.getElementById('jspm-status').className = "disconnected";
+            }
+        };
 
-    ws.onopen = function () {
-        const buffer = new Uint8Array(data.length);
-        for (let i = 0; i < data.length; i++) {
-            buffer[i] = data.charCodeAt(i);
+        // Fungsi Cek Status
+        function jspmWSStatus() {
+            if (JSPM.JSPrintManager.websocket_status == JSPM.WSStatus.Open)
+                return true;
+            else if (JSPM.JSPrintManager.websocket_status == JSPM.WSStatus.Closed) {
+                console.warn('JSPM Client tidak ditemukan atau tertutup.');
+                return false;
+            }
+            else if (JSPM.JSPrintManager.websocket_status == JSPM.WSStatus.Blocked) {
+                alert('JSPM Client memblokir website ini. Cek pengaturan whitelist di aplikasi JSPM Client.');
+                return false;
+            }
         }
-        ws.send(buffer);
-        ws.close();
-    };
 
-    ws.onerror = function () {
-        alert("RawBT tidak aktif / printer tidak siap");
-    };
-}
-</script>
+        // 2. Mendapatkan Daftar Printer
+        function getPrinters() {
+            JSPM.JSPrintManager.getPrinters().then(function (printers) {
+                clientPrinters = printers;
+                var options = '';
+                for (var i = 0; i < clientPrinters.length; i++) {
+                    options += '<option value="' + clientPrinters[i] + '">' + clientPrinters[i] + '</option>';
+                }
+                document.getElementById('printer-list').innerHTML = options;
+                document.getElementById('printer-list').disabled = false;
+                document.getElementById('btn-print').disabled = false;
+            });
+        }
 
+        // 3. Fungsi Print (Mengirim Raw Data / Text)
+        function doPrint() {
+            if (jspmWSStatus()) {
+                // Membuat Print Job
+                var cpj = new JSPM.ClientPrintJob();
+                
+                // Set Printer yang dipilih user
+                cpj.clientPrinter = new JSPM.InstalledPrinter(document.getElementById('printer-list').value);
+
+                // Contoh Isi Struk (Format Raw Text Sederhana)
+                // Gunakan perintah ESC/POS (seperti \x1B\x40) jika printer thermal mendukungnya untuk formatting lebih bagus
+                var strukText = "================================\n";
+                strukText += "       TEST PRINT POS ERP       \n";
+                strukText += "================================\n";
+                strukText += "Tanggal : " + new Date().toLocaleString() + "\n";
+                strukText += "Status  : OK\n";
+                strukText += "Printer : " + document.getElementById('printer-list').value + "\n";
+                strukText += "--------------------------------\n";
+                strukText += "Terima kasih sudah berkunjung!\n";
+                strukText += "\n\n\n_"; // Feed paper (spasi bawah)
+
+                // Kirim data sebagai Raw Plain Text
+                cpj.printerCommands = strukText;
+                
+                // Kirim ke Client
+                cpj.sendToClient();
+                
+                alert("Perintah print dikirim!");
+            }
+        }
+    </script>
 </body>
 </html>
