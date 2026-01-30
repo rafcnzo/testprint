@@ -149,12 +149,14 @@
                 body: JSON.stringify({
                     printerName: currentPrinter,
                     data: [
-                        { text: "TEST KONEKSI BERHASIL", align: "CENTER" },
+                        // Contoh Item Belanja (Otomatis dilayout 2 baris biar muat 58mm)
+                        { name: "Nasi Goreng Spesial", qty: 2, price: "15.000", total: "30.000" },
+                        { name: "Es Teh Manis", qty: 1, price: "5.000", total: "5.000" },
+                        { name: "Ayam Bakar Madu", qty: 1, price: "20.000", total: "20.000" },
+                        
+                        // Contoh Text Manual (buat Total / Footer tambahan)
                         { text: "--------------------------------", align: "CENTER" },
-                        { text: "Printer: " + currentPrinter, align: "LEFT" },
-                        { text: "Waktu: " + new Date().toLocaleTimeString(), align: "LEFT" },
-                        { text: "--------------------------------", align: "CENTER" },
-                        { text: "Status: OK", align: "CENTER" }
+                        { text: "TOTAL: Rp 55.000", align: "RIGHT" } // Total ditaruh kanan
                     ]
                 })
             });
