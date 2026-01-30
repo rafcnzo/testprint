@@ -3,125 +3,177 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Test Print JSPM v8 - POS Restoran</title>
+    <title>POS Printer Manager</title>
     <style>
-        body { font-family: sans-serif; padding: 20px; max-width: 600px; margin: 0 auto; }
-        .box { border: 1px solid #ccc; padding: 15px; border-radius: 5px; margin-bottom: 20px; }
-        .status { font-weight: bold; margin-bottom: 10px; }
-        .connected { color: green; }
-        .disconnected { color: red; }
-        button { padding: 10px 20px; cursor: pointer; background-color: #007bff; color: white; border: none; border-radius: 4px; }
-        button:disabled { background-color: #ccc; }
-        select { padding: 8px; width: 100%; margin-bottom: 10px; }
+        body { font-family: sans-serif; max-width: 500px; margin: 30px auto; background: #f0f2f5; }
+        .card { background: white; padding: 20px; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
+        
+        /* Tab Styling */
+        .tabs { display: flex; border-bottom: 2px solid #ddd; margin-bottom: 20px; }
+        .tab { flex: 1; padding: 10px; text-align: center; cursor: pointer; font-weight: bold; color: #777; }
+        .tab.active { border-bottom: 2px solid #007bff; color: #007bff; }
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
+
+        /* Form Elements */
+        select, button { width: 100%; padding: 12px; margin-top: 10px; border-radius: 5px; }
+        select { border: 1px solid #ddd; }
+        button { background: #007bff; color: white; border: none; cursor: pointer; font-weight: bold; }
+        button:hover { background: #0056b3; }
+        button:disabled { background: #ccc; cursor: not-allowed; }
+
+        .status { margin-bottom: 15px; font-size: 14px; text-align: center; }
+        .badge { padding: 4px 8px; border-radius: 4px; font-size: 12px; }
+        .online { background: #d4edda; color: #155724; }
+        .offline { background: #f8d7da; color: #721c24; }
     </style>
 </head>
 <body>
 
-    <h2>🛠️ Test JSPrintManager v8 (POS Mini)</h2>
-    
-    <div class="box">
-        <div class="status">
-            Status JSPM Client: <span id="jspm-status" class="disconnected">Mencari Client App...</span>
-        </div>
-        <small>Pastikan aplikasi JSPrintManager Client sudah berjalan di komputer ini.</small>
+<div class="card">
+    <div class="status">
+        Status Bridge: <span id="status-badge" class="badge offline">Menghubungkan...</span>
     </div>
 
-    <div class="box">
-        <label>Pilih Printer:</label>
-        <select id="printer-list" disabled>
-            <option>Menunggu koneksi...</option>
+    <div class="tabs">
+        <div class="tab active" onclick="switchTab('tab-setting')">⚙️ Pilih Printer</div>
+        <div class="tab" onclick="switchTab('tab-test')">🖨️ Test Print</div>
+    </div>
+
+    <div id="tab-setting" class="tab-content active">
+        <label>Daftar Printer di Komputer Ini:</label>
+        <select id="printer-select" onchange="savePrinter()">
+            <option value="">-- Sedang memuat printer... --</option>
         </select>
-        
-        <br><br>
-        <button id="btn-print" onclick="doPrint()" disabled>🖨️ Test Print Struk</button>
+        <p style="font-size: 12px; color: #666; margin-top: 5px;">
+            *Jika kosong, pastikan service .exe sudah jalan.
+        </p>
+        <button onclick="loadPrinters()">🔄 Refresh Daftar Printer</button>
     </div>
 
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/bluebird/3.3.5/bluebird.min.js"></script>
-    <script src="https://code.jquery.com/jquery-3.2.1.slim.min.js"></script>
-    
-    <script src="https://jsprintmanager.azurewebsites.net/scripts/JSPrintManager.js"></script>
+    <div id="tab-test" class="tab-content">
+        <div style="background: #eee; padding: 10px; border-radius: 5px; margin-bottom: 10px;">
+            <strong>Printer Terpilih:</strong><br>
+            <span id="selected-printer-display" style="color: #007bff;">Belum dipilih</span>
+        </div>
+        <button id="btn-print" onclick="testPrint()" disabled>Kirim Test Print</button>
+    </div>
+</div>
 
-    <script>
-        // 1. Setup WebSocket & Status
-        var clientPrinters = null;
+<script>
+    const API_URL = 'http://localhost:3000';
+    let currentPrinter = localStorage.getItem('pos_printer_name') || '';
+
+    // 1. Fungsi Ganti Tab
+    function switchTab(tabId) {
+        document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+        document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
         
-        // Cek status koneksi WebSocket ke JSPM Client App
-        JSPM.JSPrintManager.auto_reconnect = true;
-        JSPM.JSPrintManager.start();
+        // Aktifkan yg diklik (Logic sederhana via index/text matching untuk demo ini)
+        if(tabId === 'tab-setting') document.querySelectorAll('.tab')[0].classList.add('active');
+        if(tabId === 'tab-test') document.querySelectorAll('.tab')[1].classList.add('active');
         
-        JSPM.JSPrintManager.WS.onStatusChanged = function () {
-            if (jspmWSStatus()) {
-                // Koneksi Berhasil
-                document.getElementById('jspm-status').innerText = "TERHUBUNG (Connected)";
-                document.getElementById('jspm-status').className = "connected";
-                
-                // Ambil daftar printer
-                getPrinters();
-            } else {
-                // Koneksi Gagal
-                document.getElementById('jspm-status').innerText = "TIDAK TERHUBUNG (Pastikan App JSPM Client berjalan!)";
-                document.getElementById('jspm-status').className = "disconnected";
-            }
-        };
+        document.getElementById(tabId).classList.add('active');
+        updateDisplay();
+    }
 
-        // Fungsi Cek Status
-        function jspmWSStatus() {
-            if (JSPM.JSPrintManager.websocket_status == JSPM.WSStatus.Open)
-                return true;
-            else if (JSPM.JSPrintManager.websocket_status == JSPM.WSStatus.Closed) {
-                console.warn('JSPM Client tidak ditemukan atau tertutup.');
-                return false;
-            }
-            else if (JSPM.JSPrintManager.websocket_status == JSPM.WSStatus.Blocked) {
-                alert('JSPM Client memblokir website ini. Cek pengaturan whitelist di aplikasi JSPM Client.');
-                return false;
-            }
-        }
+    // 2. Cek Koneksi & Load Printer
+    async function loadPrinters() {
+        const select = document.getElementById('printer-select');
+        const badge = document.getElementById('status-badge');
 
-        // 2. Mendapatkan Daftar Printer
-        function getPrinters() {
-            JSPM.JSPrintManager.getPrinters().then(function (printers) {
-                clientPrinters = printers;
-                var options = '';
-                for (var i = 0; i < clientPrinters.length; i++) {
-                    options += '<option value="' + clientPrinters[i] + '">' + clientPrinters[i] + '</option>';
-                }
-                document.getElementById('printer-list').innerHTML = options;
-                document.getElementById('printer-list').disabled = false;
-                document.getElementById('btn-print').disabled = false;
+        try {
+            // Cek status
+            let res = await fetch(`${API_URL}/`);
+            if(res.ok) {
+                badge.innerText = "ONLINE"; 
+                badge.className = "badge online";
+            }
+
+            // Ambil List Printer
+            select.innerHTML = '<option>Memuat...</option>';
+            let listRes = await fetch(`${API_URL}/printers`);
+            let printers = await listRes.json();
+
+            select.innerHTML = '<option value="">-- Pilih Printer --</option>';
+            printers.forEach(p => {
+                let opt = document.createElement('option');
+                opt.value = p;
+                opt.text = p;
+                if(p === currentPrinter) opt.selected = true; // Auto select yg tersimpan
+                select.appendChild(opt);
             });
+            
+            savePrinter(); // Update state
+
+        } catch (e) {
+            badge.innerText = "OFFLINE / ERROR";
+            badge.className = "badge offline";
+            select.innerHTML = '<option>Gagal koneksi ke Service</option>';
         }
+    }
 
-        // 3. Fungsi Print (Mengirim Raw Data / Text)
-        function doPrint() {
-            if (jspmWSStatus()) {
-                // Membuat Print Job
-                var cpj = new JSPM.ClientPrintJob();
-                
-                // Set Printer yang dipilih user
-                cpj.clientPrinter = new JSPM.InstalledPrinter(document.getElementById('printer-list').value);
+    // 3. Simpan Pilihan User
+    function savePrinter() {
+        const select = document.getElementById('printer-select');
+        currentPrinter = select.value;
+        localStorage.setItem('pos_printer_name', currentPrinter); // Simpan di browser
+        updateDisplay();
+    }
 
-                // Contoh Isi Struk (Format Raw Text Sederhana)
-                // Gunakan perintah ESC/POS (seperti \x1B\x40) jika printer thermal mendukungnya untuk formatting lebih bagus
-                var strukText = "================================\n";
-                strukText += "       TEST PRINT POS ERP       \n";
-                strukText += "================================\n";
-                strukText += "Tanggal : " + new Date().toLocaleString() + "\n";
-                strukText += "Status  : OK\n";
-                strukText += "Printer : " + document.getElementById('printer-list').value + "\n";
-                strukText += "--------------------------------\n";
-                strukText += "Terima kasih sudah berkunjung!\n";
-                strukText += "\n\n\n_"; // Feed paper (spasi bawah)
-
-                // Kirim data sebagai Raw Plain Text
-                cpj.printerCommands = strukText;
-                
-                // Kirim ke Client
-                cpj.sendToClient();
-                
-                alert("Perintah print dikirim!");
-            }
+    function updateDisplay() {
+        const display = document.getElementById('selected-printer-display');
+        const btn = document.getElementById('btn-print');
+        
+        if(currentPrinter) {
+            display.innerText = currentPrinter;
+            btn.disabled = false;
+        } else {
+            display.innerText = "Belum dipilih (Buka Tab Setting)";
+            btn.disabled = true;
         }
-    </script>
+    }
+
+    // 4. Test Print Logic
+    async function testPrint() {
+        if(!currentPrinter) return alert("Pilih printer dulu di tab sebelah!");
+
+        const btn = document.getElementById('btn-print');
+        btn.disabled = true;
+        btn.innerText = "Mengirim...";
+
+        try {
+            const res = await fetch(`${API_URL}/print`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    printerName: currentPrinter,
+                    data: [
+                        { text: "TEST KONEKSI BERHASIL", align: "CENTER" },
+                        { text: "--------------------------------", align: "CENTER" },
+                        { text: "Printer: " + currentPrinter, align: "LEFT" },
+                        { text: "Waktu: " + new Date().toLocaleTimeString(), align: "LEFT" },
+                        { text: "--------------------------------", align: "CENTER" },
+                        { text: "Status: OK", align: "CENTER" }
+                    ]
+                })
+            });
+
+            const json = await res.json();
+            if(json.status === 'success') alert("✅ Print Berhasil!");
+            else alert("❌ Print Gagal: " + json.message);
+
+        } catch (e) {
+            alert("⚠️ Error Koneksi ke Service");
+        } finally {
+            btn.disabled = false;
+            btn.innerText = "Kirim Test Print";
+        }
+    }
+
+    // Init saat load
+    loadPrinters();
+
+</script>
 </body>
 </html>
